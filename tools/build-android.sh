@@ -1,92 +1,133 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# Build the MediaFlow Proxy Light binary for Android ABIs.
+# Build mediaflow-proxy-light for Android ABIs and (optionally) drop the
+# stripped binaries directly into a sibling `mediaflow-android` project's
+# `jniLibs/` tree so `./gradlew assembleRelease` just works afterwards.
+#
+# On Android 10+ binaries cannot be executed from app-writable paths, so we
+# package the proxy as `libmediaflow-proxy.so` inside `jniLibs/<abi>/` — the
+# Android packager extracts those to `nativeLibraryDir` at install time,
+# which IS executable.  The companion app's `ProxyManager` then spawns the
+# binary from there via `ProcessBuilder`.
 #
 # Requirements:
 #   - Android NDK installed (set ANDROID_NDK_HOME)
-#   - Rust targets installed:
-#       rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+#   - Rust targets:
+#       rustup target add aarch64-linux-android armv7-linux-androideabi \
+#                        x86_64-linux-android i686-linux-android
 #
 # Usage:
 #   export ANDROID_NDK_HOME=$HOME/Library/Android/sdk/ndk/<version>
 #   ./tools/build-android.sh
 #
-# Output:
-#   target/<abi>/release/mediaflow-proxy-light   (stripped binary)
+# Environment overrides:
+#   ANDROID_APP_DIR — path to the sibling Android project (defaults to
+#                     `../mediaflow-android`).  Set to empty string to skip
+#                     the auto-copy step.
+#   ABIS           — space-separated list of ABIs to build
+#                    (default: all four).  Useful for faster iteration.
 # ---------------------------------------------------------------------------
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+ANDROID_APP_DIR="${ANDROID_APP_DIR-$PROJECT_DIR/../mediaflow-android}"
+API_LEVEL=21
 
 : "${ANDROID_NDK_HOME:?'ANDROID_NDK_HOME must be set to your NDK installation directory'}"
 
-# Minimum API level
-API_LEVEL=21
-
-# Detect NDK toolchain bin directory
+# Detect NDK toolchain bin directory (host-specific)
 NDK_TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt"
-if [[ "$(uname)" == "Darwin" ]]; then
-    NDK_BIN="$NDK_TOOLCHAIN/darwin-x86_64/bin"
-    if [[ ! -d "$NDK_BIN" ]]; then
-        # Apple Silicon NDK path
-        NDK_BIN="$NDK_TOOLCHAIN/darwin-arm64/bin"
-    fi
-else
-    NDK_BIN="$NDK_TOOLCHAIN/linux-x86_64/bin"
-fi
-
-if [[ ! -d "$NDK_BIN" ]]; then
-    echo "ERROR: NDK toolchain not found at $NDK_BIN" >&2
-    exit 1
-fi
-
+case "$(uname)" in
+    Darwin)
+        NDK_BIN="$NDK_TOOLCHAIN/darwin-x86_64/bin"
+        [[ -d "$NDK_BIN" ]] || NDK_BIN="$NDK_TOOLCHAIN/darwin-arm64/bin"
+        ;;
+    Linux)
+        NDK_BIN="$NDK_TOOLCHAIN/linux-x86_64/bin"
+        ;;
+    *)
+        echo "Unsupported host OS: $(uname)" >&2; exit 1;;
+esac
+[[ -d "$NDK_BIN" ]] || { echo "NDK toolchain not found at $NDK_BIN" >&2; exit 1; }
 export PATH="$NDK_BIN:$PATH"
 
-FEATURES="hls,mpd,drm,xtream,extractors,web-ui,redis,acestream"
+# Feature set — mirrors the Android release CI.  Keep in sync with
+# .github/workflows/release.yml → build-android job.
+FEATURES="hls,mpd,drm,xtream,extractors,base64-url,vendored-openssl,acestream"
 
-TARGETS=(
-    "aarch64-linux-android:aarch64-linux-android${API_LEVEL}-clang:arm64-v8a"
-    "armv7-linux-androideabi:armv7a-linux-androideabi${API_LEVEL}-clang:armeabi-v7a"
-    "x86_64-linux-android:x86_64-linux-android${API_LEVEL}-clang:x86_64"
+# All ABIs supported by default
+ALL_TARGETS=(
+    "aarch64-linux-android|aarch64-linux-android${API_LEVEL}-clang|arm64-v8a"
+    "armv7-linux-androideabi|armv7a-linux-androideabi${API_LEVEL}-clang|armeabi-v7a"
+    "x86_64-linux-android|x86_64-linux-android${API_LEVEL}-clang|x86_64"
+    "i686-linux-android|i686-linux-android${API_LEVEL}-clang|x86"
 )
 
-for entry in "${TARGETS[@]}"; do
-    IFS=':' read -r RUST_TARGET LINKER ABI <<<"$entry"
-    echo ""
-    echo "==> Building $ABI ($RUST_TARGET)"
+# Filter by ABIS env var if set
+if [[ -n "${ABIS:-}" ]]; then
+    FILTERED=()
+    for wanted in $ABIS; do
+        for entry in "${ALL_TARGETS[@]}"; do
+            IFS='|' read -r _ _ ABI <<<"$entry"
+            [[ "$ABI" == "$wanted" ]] && FILTERED+=("$entry")
+        done
+    done
+    TARGETS=("${FILTERED[@]}")
+else
+    TARGETS=("${ALL_TARGETS[@]}")
+fi
 
-    # Set linker via environment variable
-    CARGO_LINKER_VAR="CARGO_TARGET_${RUST_TARGET//-/_}_LINKER"
-    CARGO_LINKER_VAR="${CARGO_LINKER_VAR^^}"
-    export "$CARGO_LINKER_VAR"="$LINKER"
+echo "==> Building ${#TARGETS[@]} ABI(s):"
+for entry in "${TARGETS[@]}"; do
+    IFS='|' read -r _ _ ABI <<<"$entry"
+    echo "     - $ABI"
+done
+
+for entry in "${TARGETS[@]}"; do
+    IFS='|' read -r RUST_TARGET LINKER ABI <<<"$entry"
+    echo ""
+    echo "==> $ABI ($RUST_TARGET)"
+
+    TARGET_UPPER="$(echo "$RUST_TARGET" | tr 'a-z-' 'A-Z_')"
+    export "CARGO_TARGET_${TARGET_UPPER}_LINKER=$NDK_BIN/$LINKER"
+    export "CC_${RUST_TARGET}=$NDK_BIN/$LINKER"
+    export "AR_${RUST_TARGET}=$NDK_BIN/llvm-ar"
 
     cargo build \
         --release \
         --target "$RUST_TARGET" \
+        --no-default-features \
         --features "$FEATURES" \
         --manifest-path "$PROJECT_DIR/Cargo.toml"
 
     OUT="$PROJECT_DIR/target/$RUST_TARGET/release/mediaflow-proxy-light"
-    STRIPPED="$PROJECT_DIR/target/$RUST_TARGET/release/mediaflow-proxy-light-stripped"
+    STRIPPED="$PROJECT_DIR/target/$RUST_TARGET/release/libmediaflow-proxy.so"
 
-    # Strip the binary if llvm-strip is available
-    if command -v llvm-strip &>/dev/null; then
-        llvm-strip -o "$STRIPPED" "$OUT"
-        echo "    Stripped: $STRIPPED ($(du -sh "$STRIPPED" | cut -f1))"
-    else
-        cp "$OUT" "$STRIPPED"
-        echo "    Output:   $STRIPPED ($(du -sh "$STRIPPED" | cut -f1)) [not stripped — llvm-strip not found]"
+    "$NDK_BIN/llvm-strip" -o "$STRIPPED" "$OUT"
+    echo "    built + stripped: $STRIPPED ($(du -sh "$STRIPPED" | cut -f1))"
+
+    # Auto-copy into the sibling Android project's jniLibs/ tree if present.
+    if [[ -n "$ANDROID_APP_DIR" && -d "$ANDROID_APP_DIR/app/src/main" ]]; then
+        DEST_DIR="$ANDROID_APP_DIR/app/src/main/jniLibs/$ABI"
+        mkdir -p "$DEST_DIR"
+        cp "$STRIPPED" "$DEST_DIR/libmediaflow-proxy.so"
+        echo "    → installed to $DEST_DIR/libmediaflow-proxy.so"
     fi
 done
 
 echo ""
-echo "==> Done. Copy stripped binaries to the Android app:"
-echo ""
-for entry in "${TARGETS[@]}"; do
-    IFS=':' read -r RUST_TARGET _ ABI <<<"$entry"
-    echo "    android/app/src/main/assets/binaries/$ABI/mediaflow-proxy"
-    echo "    <- target/$RUST_TARGET/release/mediaflow-proxy-light-stripped"
-done
-echo ""
+if [[ -n "$ANDROID_APP_DIR" && -d "$ANDROID_APP_DIR/app/src/main" ]]; then
+    echo "==> Done.  Binaries installed into $ANDROID_APP_DIR/app/src/main/jniLibs/"
+    echo "    Next: cd $ANDROID_APP_DIR && ./gradlew assembleRelease"
+else
+    echo "==> Done.  Stripped binaries available at:"
+    for entry in "${TARGETS[@]}"; do
+        IFS='|' read -r RUST_TARGET _ ABI <<<"$entry"
+        echo "     $ABI:  target/$RUST_TARGET/release/libmediaflow-proxy.so"
+    done
+    echo ""
+    echo "    ANDROID_APP_DIR not set or not found — copy manually into"
+    echo "    <android-project>/app/src/main/jniLibs/<abi>/libmediaflow-proxy.so"
+fi
