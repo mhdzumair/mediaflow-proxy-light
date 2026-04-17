@@ -86,14 +86,14 @@ jobs:
           export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/bin/aarch64-linux-android21-clang"
           export CC_aarch64_linux_android="$TOOLCHAIN/bin/aarch64-linux-android21-clang"
           export AR_aarch64_linux_android="$TOOLCHAIN/bin/llvm-ar"
-          # NDK r23+ dropped legacy `<target>-ranlib` shims; vendored-openssl's
-          # Makefile hard-codes that name — redirect to llvm-ranlib.
           export RANLIB_aarch64_linux_android="$TOOLCHAIN/bin/llvm-ranlib"
+          # tls-rustls instead of tls-native/vendored-openssl: avoids linker
+          # conflicts between OpenSSL and BoringSSL (rquest's boring-sys2).
           cargo build \
             --release \
             --target aarch64-linux-android \
             --no-default-features \
-            --features "hls,mpd,drm,xtream,extractors,base64-url,vendored-openssl,web-ui,acestream"
+            --features "hls,mpd,drm,xtream,extractors,base64-url,tls-rustls,web-ui,acestream"
 
   # ---------------------------------------------------------------------------
   # iOS cross-compile smoke test (device arch only)
@@ -125,4 +125,4 @@ jobs:
             --release \
             --target aarch64-apple-ios \
             --no-default-features \
-            --features "ffi,hls,mpd,drm,xtream,web-ui"
+            --features "ffi,hls,mpd,drm,xtream,web-ui,tls-rustls"

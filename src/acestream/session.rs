@@ -222,8 +222,12 @@ impl AcestreamSessionManager {
         // proxy's own localhost.
         Ok((
             rewrite_engine_host(playback_url, engine_host, engine_port),
-            engine.command_url.map(|s| rewrite_engine_host(s, engine_host, engine_port)),
-            engine.stat_url.map(|s| rewrite_engine_host(s, engine_host, engine_port)),
+            engine
+                .command_url
+                .map(|s| rewrite_engine_host(s, engine_host, engine_port)),
+            engine
+                .stat_url
+                .map(|s| rewrite_engine_host(s, engine_host, engine_port)),
         ))
     }
 

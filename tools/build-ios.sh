@@ -23,7 +23,9 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 # extractors exist to bypass Cloudflare via TLS fingerprinting, which is
 # a desktop/Android concern.  boring-sys also has iOS link-time issues
 # (missing `___chkstk_darwin` for older deployment targets).
-FEATURES="ffi,hls,mpd,drm,xtream,web-ui"
+# tls-rustls avoids native-tls → openssl-sys, which wouldn't cross-compile
+# for iOS without extra work.
+FEATURES="ffi,hls,mpd,drm,xtream,web-ui,tls-rustls"
 XCFRAMEWORK_OUT="$PROJECT_DIR/MediaflowProxy.xcframework"
 HEADERS_DIR="$PROJECT_DIR/include"
 

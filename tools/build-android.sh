@@ -55,9 +55,11 @@ export PATH="$NDK_BIN:$PATH"
 
 # Feature set — mirrors the Android release CI.  Keep in sync with the
 # `mediaflow-android` release workflow.
-# `web-ui` is included so the on-device web UI (served from the proxy on
-# localhost) works when the user opens the configurator from a browser.
-FEATURES="hls,mpd,drm,xtream,extractors,base64-url,vendored-openssl,acestream,web-ui"
+# - `tls-rustls` instead of `tls-native`: avoids linker conflicts between
+#   system OpenSSL and the BoringSSL shipped by rquest's `boring-sys2`.
+# - `web-ui` included so the on-device web UI (served on localhost) works
+#   when the user opens the configurator from a browser.
+FEATURES="hls,mpd,drm,xtream,extractors,base64-url,tls-rustls,acestream,web-ui"
 
 # All ABIs supported by default
 ALL_TARGETS=(
