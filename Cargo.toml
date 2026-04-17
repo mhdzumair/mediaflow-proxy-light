@@ -1,70 +1,172 @@
 [package]
 name = "mediaflow-proxy-light"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 
-[features]
-default = []
-vendored-openssl = ["openssl/vendored"]
-benchmark = [
-    "dep:bollard",
-    "dep:futures-util",
-    "dep:sysinfo",
-    "dep:clap",
-    "reqwest/stream",
-]
+# Ignore dependencies that cargo-machete flags but are legitimately behind
+# disabled feature flags (detected when those features aren't in `default`).
+[package.metadata.cargo-machete]
+ignored = ["deadpool-redis", "redis", "openssl"]
 
+# ---------------------------------------------------------------------------
+# Features
+# ---------------------------------------------------------------------------
+[features]
+default = ["hls", "mpd", "drm", "xtream", "extractors", "web-ui", "base64-url", "telegram", "acestream"]
+hls = []
+mpd = []
+drm = []
+xtream = []
+extractors = []
+base64-url = []
+web-ui = ["dep:rust-embed", "dep:mime_guess"]
+redis = ["dep:deadpool-redis", "dep:redis"]
+telegram = ["dep:grammers-client", "dep:grammers-tl-types"]
+acestream = []
+transcode = []
+ffi = []    # iOS C FFI bridge (used when building xcframework)
+
+vendored-openssl = ["openssl/vendored"]
+
+# ---------------------------------------------------------------------------
+# Lints
+# ---------------------------------------------------------------------------
+# Many configuration fields, cache-key helpers, header utilities, prebuffer
+# infrastructure, and extractor-base methods are deliberately exposed as
+# library APIs for the phased roadmap and for FFI consumers (Android / iOS).
+# Rustc flags them as dead code because the current binary doesn't call every
+# item yet — allowing crate-wide keeps warnings meaningful without losing
+# forward-compatible surface area.
+[lints.rust]
+dead_code = "allow"
+
+# MP4/DASH parsers and streaming handlers legitimately need many arguments in
+# a few places and we occasionally hold a RefCell borrow across an await when
+# lock scope is fully controlled.  These pedantic lints are off crate-wide;
+# real correctness lints stay on.
+[lints.clippy]
+too_many_arguments        = "allow"
+await_holding_refcell_ref = "allow"
+empty_line_after_doc_comments = "allow"
+
+# ---------------------------------------------------------------------------
+# Release profile — maximise performance
+# ---------------------------------------------------------------------------
 [profile.release]
-# Optimize for speed and enable all optimizations
 opt-level = 3
-lto = "fat"  # Use fat LTO for maximum optimization
+lto = "fat"
 codegen-units = 1
 panic = "abort"
 strip = true
 debug = false
 
+# ---------------------------------------------------------------------------
+# Core dependencies
+# ---------------------------------------------------------------------------
 [dependencies]
-actix-web = "4.11"
-tokio = { version = "1.45", features = ["full"] }
+actix-web = "4.13"
+actix-cors = "0.7"
+tokio = { version = "1.51", features = ["full"] }
+tokio-util = { version = "0.7", features = ["io"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-reqwest = { version = "0.12.19", features = ["stream", "json", "socks"] }
 futures = "0.3"
+bytes = "1.11"
+async-stream = "0.3"
+async-trait = "0.1"
+
+# HTTP client — native-tls uses the OS TLS stack (SecureTransport on macOS,
+# OpenSSL on Linux) which avoids rustls JA3/JA4 fingerprint blocks on CDNs
+# like Akamai.  For Android/iOS cross-compilation switch back to rustls-tls
+# or enable the vendored-openssl feature.
+reqwest = { version = "0.12.28", default-features = false, features = ["stream", "json", "socks", "native-tls", "gzip", "deflate"] }
+# Browser TLS/JA3 impersonation — used by extractors that hit Cloudflare-protected
+# hosts (e.g. DoodStream → playmogo.com). rquest is a reqwest fork with Chrome
+# fingerprint spoofing, equivalent to Python's curl_cffi with impersonate="chrome".
+rquest = { version = "5", default-features = false, features = ["full", "socks"] }
+rquest-util = "2"
+
+# Crypto — AES-CBC for proxy-URL encryption, AES-CTR for CENC DRM
 aes = "0.8"
+cbc = { version = "0.1", features = ["alloc"] }
+cipher = { version = "0.4", features = ["block-padding"] }
+ctr = "0.9"
+rand = "0.9.3"
 base64 = "0.22.1"
-rand = "0.9.1"
-anyhow = "1.0"
+
+# Encoding / data
+hex = "0.4"
+uuid = { version = "1", features = ["v4"] }
+url = "2.5"
+urlencoding = "2.1"
+regex = "1.12"
 thiserror = "2.0"
+
+# Configuration
 config = "0.15"
+
+# Logging
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-bytes = "1.10"
-async-stream = "0.3"
-actix-web-httpauth = "0.8"
-jsonwebtoken = "9.3"
+
+# Concurrency
+dashmap = "6"
+
+# Date / time — RFC3339 formatting for DASH availabilityStartTime / SegmentTimeline
 time = "0.3"
-url = "2.5"
-regex = "1.11"
-urlencoding = "2.1"
+
+# ---------------------------------------------------------------------------
+# Phase 1+ (HLS / MPD / Extractor) — always compiled but feature-gated at
+# call sites.  Add here when the corresponding src/ modules land.
+# ---------------------------------------------------------------------------
+
+# M3U8 parsing (Phase 1)
+m3u8-rs = "6"
+
+# XML parsing for DASH/MPD (Phase 2)
+quick-xml = { version = "0.37", features = ["serialize"] }
+
+# In-memory TTL cache (Phase 1)
+moka = { version = "0.12", features = ["future"] }
+
+# HTML scraping for extractors (Phase 5)
+scraper = "0.20"
+
+# ---------------------------------------------------------------------------
+# Optional / feature-gated dependencies
+# ---------------------------------------------------------------------------
+
+# Web UI — embed static/ at compile time
+rust-embed = { version = "8", optional = true }
+mime_guess = { version = "2", optional = true }
+
+# Redis — distributed cache & rate-limiting
+deadpool-redis = { version = "0.18", features = ["rt_tokio_1"], optional = true }
+redis = { version = "0.27", features = ["tokio-comp", "connection-manager"], optional = true }
+
+# Telegram MTProto
+grammers-client = { version = "0.7", optional = true }
+grammers-tl-types = { version = "0.7", optional = true }
+
+# Vendored OpenSSL (only needed for legacy builds; prefer rustls)
 openssl = { version = "0.10", features = ["vendored"], optional = true }
 
-# Benchmark-only dependencies
-clap = { version = "4.5", features = ["derive"], optional = true }
-bollard = { version = "0.19", optional = true }
-futures-util = { version = "0.3", optional = true }
-sysinfo = { version = "0.35", optional = true }
-criterion = { version = "0.6", features = ["async_tokio"], optional = true }
-actix-cors = "0.7"
-
+# ---------------------------------------------------------------------------
+# Dev dependencies
+# ---------------------------------------------------------------------------
 [dev-dependencies]
 tokio-test = "0.4"
-tempfile = "3.14"
+tempfile = "3.27"
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
 
+# ---------------------------------------------------------------------------
+# Library / binary targets
+# ---------------------------------------------------------------------------
 [lib]
 name = "mediaflow_proxy_light"
 path = "src/lib.rs"
+crate-type = ["staticlib", "rlib"]   # staticlib needed for iOS xcframework
 
 [[bin]]
-name = "benchmark"
-path = "tools/benchmark.rs"
-required-features = ["benchmark"]
+name = "mediaflow-proxy-light"
+path = "src/main.rs"

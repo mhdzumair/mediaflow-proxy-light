@@ -1,0 +1,56 @@
+[server]
+host    = "0.0.0.0"
+port    = 8888
+workers = 8
+
+[auth]
+api_password = "dedsec"
+
+[proxy]
+connect_timeout         = 300     # TCP handshake timeout (seconds)
+follow_redirects        = true
+buffer_size             = 262144
+proxy_url               = ""
+all_proxy               = false
+
+# Tunables — all optional, defaults shown:
+request_timeout_factor  = 8       # request timeout = connect_timeout × this
+max_concurrent_per_host = 10      # cap parallel upstream conns per host (0 = unlimited)
+pool_idle_timeout       = 90      # seconds to keep idle conns alive
+pool_max_idle_per_host  = 100     # max idle conns retained per host per worker
+body_read_timeout       = 60      # timeout for fully reading small bodies (manifests)
+
+[hls]
+prebuffer_segments   = 5
+prebuffer_cache_size = 50
+segment_cache_ttl    = 300
+inactivity_timeout   = 60
+
+[mpd]
+live_playlist_depth = 8
+live_init_cache_ttl = 60
+remux_to_ts         = false
+
+[epg]
+cache_ttl = 3600
+
+[redis]
+url             = ""
+cache_namespace = ""
+
+[telegram]
+api_id         = 0
+api_hash       = ""
+session_string = ""
+max_connections = 8
+
+[acestream]
+host        = "localhost"
+port        = 6878
+buffer_size = 4194304
+
+[transcode]
+enabled       = true
+prefer_gpu    = true
+video_bitrate = "4M"
+audio_bitrate = 192000

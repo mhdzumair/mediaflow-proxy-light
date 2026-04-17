@@ -14,8 +14,11 @@ permissions:
   packages: write    # Required for pushing to GitHub Container Registry
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Desktop / server binaries (Linux, macOS, Windows)
+  # ---------------------------------------------------------------------------
   build-binaries:
-    name: Build ${{ matrix.target }}
+    name: Desktop · ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -87,10 +90,136 @@ jobs:
           tag: ${{ github.ref }}
           overwrite: true
 
-  build-docker:
-    name: Build and push Docker image
+  # ---------------------------------------------------------------------------
+  # Android — static binaries for all ABIs, bundled into a tar.gz per ABI
+  # Used by the companion Android app which runs the proxy as a subprocess.
+  # ---------------------------------------------------------------------------
+  build-android:
+    name: Android · ${{ matrix.abi }}
     runs-on: ubuntu-latest
-    needs: build-binaries  # Wait for binaries to be uploaded first
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - abi: arm64-v8a
+            target: aarch64-linux-android
+          - abi: armeabi-v7a
+            target: armv7-linux-androideabi
+          - abi: x86_64
+            target: x86_64-linux-android
+          - abi: x86
+            target: i686-linux-android
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: ${{ matrix.target }}
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
+      - name: Export ANDROID_NDK_HOME
+        run: echo "ANDROID_NDK_HOME=${{ steps.ndk.outputs.ndk-path }}" >> $GITHUB_ENV
+
+      - name: Build for ${{ matrix.abi }}
+        run: |
+          # Single-target variant of tools/build-android.sh
+          API_LEVEL=21
+          TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          case "${{ matrix.target }}" in
+            aarch64-linux-android)     CC="$TOOLCHAIN/bin/aarch64-linux-android${API_LEVEL}-clang"   AR="$TOOLCHAIN/bin/llvm-ar" ;;
+            armv7-linux-androideabi)   CC="$TOOLCHAIN/bin/armv7a-linux-androideabi${API_LEVEL}-clang" AR="$TOOLCHAIN/bin/llvm-ar" ;;
+            x86_64-linux-android)      CC="$TOOLCHAIN/bin/x86_64-linux-android${API_LEVEL}-clang"     AR="$TOOLCHAIN/bin/llvm-ar" ;;
+            i686-linux-android)        CC="$TOOLCHAIN/bin/i686-linux-android${API_LEVEL}-clang"       AR="$TOOLCHAIN/bin/llvm-ar" ;;
+          esac
+
+          TARGET_UPPER="$(echo "${{ matrix.target }}" | tr 'a-z-' 'A-Z_')"
+          export "CARGO_TARGET_${TARGET_UPPER}_LINKER=$CC"
+          export "CC_${{ matrix.target }}=$CC"
+          export "AR_${{ matrix.target }}=$AR"
+
+          cargo build \
+            --release \
+            --target ${{ matrix.target }} \
+            --no-default-features \
+            --features "hls,mpd,drm,xtream,extractors,base64-url,vendored-openssl"
+
+          # Strip the resulting binary
+          "$TOOLCHAIN/bin/llvm-strip" \
+            target/${{ matrix.target }}/release/mediaflow-proxy-light
+
+      - name: Package binary
+        run: |
+          OUT="mediaflow-proxy-light-android-${{ matrix.abi }}.tar.gz"
+          tar -czvf "$OUT" \
+            -C target/${{ matrix.target }}/release \
+            mediaflow-proxy-light
+          echo "ASSET=$OUT" >> $GITHUB_ENV
+
+      - name: Upload Android binary
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ${{ env.ASSET }}
+          asset_name: ${{ env.ASSET }}
+          tag: ${{ github.ref }}
+          overwrite: true
+
+  # ---------------------------------------------------------------------------
+  # iOS — .xcframework containing static libs for device + simulator.
+  # Used by the companion iOS app which links the proxy as a Rust library via
+  # the C FFI (see `include/mediaflow_ffi.h`).
+  # ---------------------------------------------------------------------------
+  build-ios:
+    name: iOS · xcframework
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust + iOS targets
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ios-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build xcframework
+        run: ./tools/build-ios.sh
+
+      - name: Archive xcframework
+        run: |
+          zip -r MediaflowProxy.xcframework.zip MediaflowProxy.xcframework
+
+      - name: Upload xcframework
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: MediaflowProxy.xcframework.zip
+          asset_name: mediaflow-proxy-light-ios.xcframework.zip
+          tag: ${{ github.ref }}
+          overwrite: true
+
+  # ---------------------------------------------------------------------------
+  # Docker multi-arch image (uses pre-built Linux binaries from build-binaries)
+  # ---------------------------------------------------------------------------
+  build-docker:
+    name: Docker multi-arch image
+    runs-on: ubuntu-latest
+    needs: build-binaries
     permissions:
       contents: read
       packages: write

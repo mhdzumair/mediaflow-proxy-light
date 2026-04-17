@@ -1,0 +1,6 @@
+# Compiled benchmark binaries
+/bench
+/upstream
+
+# Generated test data
+/test.bin

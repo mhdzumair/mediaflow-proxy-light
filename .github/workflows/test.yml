@@ -11,8 +11,11 @@ env:
   RUST_VERSION: 1.87.0
 
 jobs:
-  test:
-    name: Test
+  # ---------------------------------------------------------------------------
+  # Lint + test (desktop / server)
+  # ---------------------------------------------------------------------------
+  lint-and-test:
+    name: Lint & test
     runs-on: ubuntu-latest
 
     steps:
@@ -25,7 +28,7 @@ jobs:
           components: rustfmt, clippy
 
       - name: Cache dependencies
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -37,7 +40,77 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
 
       - name: Run tests
-        run: cargo test
+        # --test-threads=1 because a few config tests mutate global env vars and
+        # race each other in parallel runs.
+        # Extractor tests are excluded here — they hit real upstream hosts
+        # (Cloudflare / Turnstile-protected) and are run locally only.
+        run: |
+          cargo test --release --lib --bins -- --test-threads=1
+          cargo test --release --test auth_tests --test config_tests -- --test-threads=1
+
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
+
+      - name: Audit unused dependencies
+        run: cargo machete
+
+  # ---------------------------------------------------------------------------
+  # Android cross-compile smoke test (arm64 only — covers 95%+ of devices)
+  # ---------------------------------------------------------------------------
+  android-smoke:
+    name: Android · arm64-v8a smoke build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-linux-android
+
+      - name: Set up Android NDK
+        id: ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r26d
+
+      - name: Build
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
+          TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/bin/aarch64-linux-android21-clang"
+          export CC_aarch64_linux_android="$TOOLCHAIN/bin/aarch64-linux-android21-clang"
+          export AR_aarch64_linux_android="$TOOLCHAIN/bin/llvm-ar"
+          cargo build \
+            --release \
+            --target aarch64-linux-android \
+            --no-default-features \
+            --features "hls,mpd,drm,xtream,extractors,base64-url,vendored-openssl"
+
+  # ---------------------------------------------------------------------------
+  # iOS cross-compile smoke test (device arch only)
+  # ---------------------------------------------------------------------------
+  ios-smoke:
+    name: iOS · aarch64 smoke build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-apple-ios
+
+      - name: Build (device)
+        run: |
+          cargo build \
+            --release \
+            --target aarch64-apple-ios \
+            --no-default-features \
+            --features "ffi,hls,mpd,drm,xtream,extractors"

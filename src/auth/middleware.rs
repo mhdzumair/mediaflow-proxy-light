@@ -12,7 +12,40 @@ use std::sync::Arc;
 use crate::auth::encryption::{EncryptionHandler, ProxyData};
 use crate::error::AppError;
 
-const OPEN_ENDPOINTS: &[&str] = &["/proxy/generate_url", "/health"];
+const OPEN_ENDPOINTS: &[&str] = &[
+    "/proxy/generate_url",
+    "/health",
+    "/metrics",
+    // Web UI navigation paths (redirect to .html pages)
+    "/speedtest",
+    "/url-generator",
+    "/playlist/builder",
+];
+
+/// Static web UI assets (html/js/css/images) are public — they contain no secrets.
+fn is_static_asset(path: &str) -> bool {
+    if path == "/" {
+        return true;
+    }
+    matches!(
+        std::path::Path::new(path)
+            .extension()
+            .and_then(|e| e.to_str()),
+        Some(
+            "html"
+                | "js"
+                | "css"
+                | "png"
+                | "jpg"
+                | "jpeg"
+                | "ico"
+                | "svg"
+                | "woff"
+                | "woff2"
+                | "ttf"
+        )
+    )
+}
 
 #[derive(Clone)]
 pub struct AuthMiddleware {
@@ -102,8 +135,9 @@ where
         let api_password = self.api_password.clone();
 
         Box::pin(async move {
-            // Check if path is in open endpoints
-            if OPEN_ENDPOINTS.iter().any(|path| req.path() == *path) {
+            // Check if path is in open endpoints or is a static web UI asset
+            if OPEN_ENDPOINTS.iter().any(|path| req.path() == *path) || is_static_asset(req.path())
+            {
                 return service.call(req).await;
             }
 
@@ -152,37 +186,38 @@ where
             // Check for direct API password
             if let Some(password) = query_params.get("api_password").and_then(|v| v.as_str()) {
                 if password == api_password {
-                    if let Some(destination) = query_params.get("d").and_then(|v| v.as_str()) {
-                        // Create proxy data from query parameters
-                        let proxy_data = ProxyData {
-                            destination: destination.to_string(),
-                            query_params: Some(Value::Object(query_params.clone())),
-                            request_headers: Some(Value::Object(
-                                query_params
-                                    .iter()
-                                    .filter_map(|(k, v)| {
-                                        k.strip_prefix("h_")
-                                            .map(|stripped| (stripped.to_string(), v.clone()))
-                                    })
-                                    .collect(),
-                            )),
-                            response_headers: Some(Value::Object(
-                                query_params
-                                    .iter()
-                                    .filter_map(|(k, v)| {
-                                        k.strip_prefix("r_")
-                                            .map(|stripped| (stripped.to_string(), v.clone()))
-                                    })
-                                    .collect(),
-                            )),
-                            exp: None,
-                            ip: None,
-                        };
+                    // Accept both "d" (canonical) and "url" (Python-proxy compat) as destination.
+                    // Endpoints like /proxy/mpd/segment have no "d=" param — use empty string so
+                    // ReqData<ProxyData> extraction never fails with a 500.
+                    let destination = query_params
+                        .get("d")
+                        .or_else(|| query_params.get("url"))
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
 
-                        // Store proxy data in request extensions
-                        req.extensions_mut().insert(proxy_data);
-                        return service.call(req).await;
+                    // Build h_* and r_* sub-maps in a single pass over query_params,
+                    // then move the full map into ProxyData (no clone).
+                    let mut request_headers = serde_json::Map::new();
+                    let mut response_headers = serde_json::Map::new();
+                    for (k, v) in &query_params {
+                        if let Some(stripped) = k.strip_prefix("h_") {
+                            request_headers.insert(stripped.to_string(), v.clone());
+                        } else if let Some(stripped) = k.strip_prefix("r_") {
+                            response_headers.insert(stripped.to_string(), v.clone());
+                        }
                     }
+
+                    let proxy_data = ProxyData {
+                        destination,
+                        query_params: Some(Value::Object(query_params)),
+                        request_headers: Some(Value::Object(request_headers)),
+                        response_headers: Some(Value::Object(response_headers)),
+                        exp: None,
+                        ip: None,
+                    };
+
+                    req.extensions_mut().insert(proxy_data);
                     return service.call(req).await;
                 }
             }

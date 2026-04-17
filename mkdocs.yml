@@ -1,0 +1,57 @@
+site_name: MediaFlow Proxy Light
+site_description: Documentation for MediaFlow Proxy Light — a high-performance Rust streaming proxy.
+site_url: https://mhdzumair.github.io/mediaflow-proxy-light/
+repo_url: https://github.com/mhdzumair/MediaFlow-Proxy-Light
+repo_name: mhdzumair/MediaFlow-Proxy-Light
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+    - search.suggest
+    - search.highlight
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+
+nav:
+  - Home: index.md
+  - Features: features.md
+  - Installation: installation.md
+  - Configuration:
+      - Environment variables: configuration/environment.md
+      - TOML config file: configuration/toml.md
+      - Docker: configuration/docker.md
+  - Usage:
+      - Overview & endpoints: usage/overview.md
+      - EPG proxy: usage/epg-proxy.md
+      - Video extractor: usage/extractor.md
+      - Xtream Codes proxy: usage/xtream.md
+      - URL parameters: usage/url-params.md
+  - Performance & Benchmarks: benchmark.md
+  - Reference:
+      - Limitations: reference/limitations.md
+  - Community:
+      - Acknowledgements: community/acknowledgements.md
+      - Contributing: community/contributing.md

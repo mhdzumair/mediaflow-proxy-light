@@ -1,20 +1,118 @@
+# MediaFlow Proxy Light — example configuration
+# Copy to config.toml and set CONFIG_PATH=/path/to/config.toml
+# All values shown are defaults unless otherwise noted.
+
 [server]
 host = "0.0.0.0"
 port = 8888
-workers = 4  # Number of worker threads. Defaults to number of CPU cores
+workers = 4  # Number of worker threads (defaults to number of CPU cores)
 
 [proxy]
-connect_timeout = 30  # Connection timeout in seconds
+connect_timeout = 30    # TCP handshake timeout (seconds)
 follow_redirects = true
-buffer_size = 262144    # Streaming buffer size in bytes
-proxy_url = ""  # Default proxy URL. Supported http/https/socks4/socks5
-all_proxy = false
+buffer_size = 262144    # Streaming buffer size in bytes (256 KB)
+proxy_url = ""          # Default proxy URL (supports http/https/socks4/socks5)
+all_proxy = false       # If true, route all traffic through proxy_url
 
-# Transport routes configuration
+# ── Upstream tunables (all optional — defaults shown) ─────────────────────────
+#
+# These control reqwest's HTTP client behaviour for upstream origins (CDN edges,
+# HLS/DASH origins, etc.).  Defaults are tuned for typical IPTV/streaming
+# workloads; most deployments don't need to change them.
+
+request_timeout_factor = 8
+# Multiplier applied to connect_timeout for the full request timeout.
+# The final value (connect_timeout × factor) bounds: TCP connect + TLS +
+# response-headers received.  Body streaming is NOT limited by this.
+
+max_concurrent_per_host = 10
+# Maximum concurrent in-flight upstream requests per origin host.
+# Matches aiohttp's `limit_per_host=10` and browsers' per-origin connection cap.
+# Capping here forces HTTP/1.1 keep-alive reuse for bursty traffic — later
+# requests skip TCP+TLS setup and go significantly faster.  Excess requests
+# queue until a slot opens.  Set to 0 to disable (unlimited parallelism).
+
+pool_idle_timeout = 90
+# Seconds an idle upstream connection is kept in the pool before being closed.
+
+pool_max_idle_per_host = 100
+# Maximum idle upstream connections retained per host per worker thread.
+
+body_read_timeout = 60
+# Timeout (seconds) for fully reading a small response body via `fetch_bytes()`.
+# Applies to manifests, playlists, EPG fetches; does NOT apply to streaming.
+
+# Per-URL transport route overrides
 [proxy.transport_routes]
-"all://*.streaming.com" = { proxy = true, proxy_url = "socks5://streaming-proxy:1080", verify_ssl = true }
-"all://*.internal.com" = { proxy = false, verify_ssl = true }
-"https://api.service.com" = { proxy = true, verify_ssl = false }
+"all://*.streaming.com"    = { proxy = true,  proxy_url = "socks5://streaming-proxy:1080", verify_ssl = true }
+"all://*.internal.com"     = { proxy = false, verify_ssl = true }
+"https://api.service.com"  = { proxy = true,  verify_ssl = false }
 
 [auth]
-api_password = "your-password"  # Replace with a secure secret key
+api_password = "your-password"  # Replace with a strong secret key
+
+# ---------------------------------------------------------------------------
+# HLS processing
+# ---------------------------------------------------------------------------
+[hls]
+prebuffer_segments  = 5    # Segments to pre-fetch ahead of playback
+prebuffer_cache_size = 50  # Max simultaneous playlist prefetchers in memory
+segment_cache_ttl   = 300  # Seconds to cache HLS segments
+inactivity_timeout  = 60   # Seconds before an idle prefetcher is evicted
+
+# ---------------------------------------------------------------------------
+# DASH / MPD processing
+# ---------------------------------------------------------------------------
+[mpd]
+live_playlist_depth  = 8    # Segments to include in a live HLS media playlist
+live_init_cache_ttl  = 60   # Seconds to cache MPD init segments
+remux_to_ts          = false # Remux DASH segments to MPEG-TS (default: fMP4)
+
+# ---------------------------------------------------------------------------
+# DRM (ClearKey)
+# ---------------------------------------------------------------------------
+[drm]
+key_cache_ttl = 3600  # Seconds to cache ClearKey decryption keys
+
+# ---------------------------------------------------------------------------
+# Redis (optional — leave url empty to use in-process cache only)
+# ---------------------------------------------------------------------------
+[redis]
+url             = ""  # e.g. "redis://localhost:6379"
+cache_namespace = ""  # Prefix added to all Redis cache keys
+
+# ---------------------------------------------------------------------------
+# Telegram MTProto streaming (requires `telegram` feature flag at compile time)
+# ---------------------------------------------------------------------------
+[telegram]
+api_id         = 0     # Your Telegram app ID from my.telegram.org
+api_hash       = ""    # Your Telegram app hash
+session_string = ""    # Serialized grammers-client session (generated at first auth)
+max_connections = 8    # Parallel DC connections for chunk downloads
+
+# ---------------------------------------------------------------------------
+# Acestream proxy (requires local Acestream engine running)
+# ---------------------------------------------------------------------------
+[acestream]
+host        = "localhost"  # Acestream engine hostname
+port        = 6878         # Acestream engine HTTP API port
+buffer_size = 4194304      # MPEG-TS fan-out buffer in bytes (4 MB)
+
+# ---------------------------------------------------------------------------
+# On-the-fly transcoding (requires ffmpeg in PATH)
+# ---------------------------------------------------------------------------
+[transcode]
+enabled       = true    # Enable /proxy/transcode endpoints
+prefer_gpu    = true    # Use hardware encoder when available (NVENC / VideoToolbox / VAAPI)
+video_bitrate = "4M"    # Target video bitrate passed to ffmpeg
+audio_bitrate = 192000  # Target audio bitrate in bits per second
+
+# ---------------------------------------------------------------------------
+# Extractor integration-test URLs  (dev / local only — not used at runtime)
+# Comment out or remove any URL that is broken/unavailable.
+# Tests for missing keys are silently skipped.
+# ---------------------------------------------------------------------------
+[test_urls]
+# vixcloud = "https://vixsrc.to/movie/1234"
+# voe      = "https://lauradaydo.com/1234"
+# fastream = "https://fastream.to/embed-1234.html"
