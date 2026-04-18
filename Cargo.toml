@@ -12,16 +12,26 @@ ignored = ["deadpool-redis", "redis", "openssl"]
 # Features
 # ---------------------------------------------------------------------------
 [features]
-# NOTE: the default TLS backend is `tls-native` (reqwest's native-tls →
-# SecureTransport on macOS, OpenSSL on Linux).  On Android both the
-# vendored OpenSSL and the BoringSSL shipped by rquest's `boring-sys2`
-# export the same SSL_* / BIO_* symbols, which breaks static linking —
-# so the Android build uses `tls-rustls` instead.  Exactly one of the two
-# TLS backends must be enabled.
+# The default TLS backend is `tls-rustls` (pure-Rust).  We can't use
+# `tls-native` by default because:
+#   * `extractors` pulls in `rquest` → `boring-sys2` which statically
+#     links BoringSSL and exports SSL_* / BIO_* / ERR_* symbols.
+#   * `tls-native` pulls in `openssl-sys` which also needs those symbol
+#     names — resolving to BoringSSL's versions at link time, which lack
+#     OpenSSL-3-only symbols like `ERR_get_error_all`, `SSL_read_ex`,
+#     `SSL_get1_peer_certificate`, `SSL_CTX_ctrl` → link failure on Linux.
+#
+# `tls-native` is still available as an opt-in (macOS works; Linux needs
+# `--no-default-features` and disabling `extractors`).  It avoids rustls
+# JA3/JA4 fingerprint blocks on a few Akamai-protected CDNs, but rquest
+# already handles the known fingerprint-sensitive hosts in our extractor
+# list, so rustls is the safe default for the rest of the proxy traffic.
+#
+# Exactly one of the two TLS backends must be enabled.
 default = [
     "hls", "mpd", "drm", "xtream", "extractors", "web-ui",
     "base64-url", "telegram", "acestream",
-    "tls-native",
+    "tls-rustls",
 ]
 hls = []
 mpd = []

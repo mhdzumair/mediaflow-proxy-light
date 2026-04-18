@@ -65,21 +65,11 @@ jobs:
         run: |
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
 
-      - name: Build (Unix)
-        if: runner.os != 'Windows'
-        run: |
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            # Use vendored OpenSSL for ARM64 cross-compilation
-            cargo build --release --target ${{ matrix.target }} --features vendored-openssl
-          else
-            cargo build --release --target ${{ matrix.target }}
-          fi
-
-      - name: Build (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          # Windows builds use vendored OpenSSL to avoid system dependency issues
-          cargo build --release --target ${{ matrix.target }} --features vendored-openssl
+      - name: Build
+        # The default features include `tls-rustls` (pure-Rust TLS), so no
+        # system OpenSSL is needed on any target — including ARM64 Linux
+        # cross-compiles and Windows builds.
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Upload binary to release
         uses: svenstaro/upload-release-action@v2
