@@ -2,7 +2,7 @@
 
 Head-to-head comparison of **mediaflow-proxy-light** (Rust) against the reference
 **mediaflow-proxy** (Python). All scripts are committed under
-[`tools/benchmark/`](../tools/benchmark/); every number below can be regenerated
+[`tools/benchmark/`](https://github.com/mhdzumair/MediaFlow-Proxy-Light/tree/main/tools/benchmark); every number below can be regenerated
 by following [**Reproducing these results**](#reproducing-these-results).
 
 ## Test Environment
@@ -155,7 +155,7 @@ amortising setup cost across the batch.
 The permit travels with the response body stream via a closure capture,
 so the slot is released only when the body is fully consumed (or the
 client disconnects and the stream is dropped). See
-[`src/proxy/stream.rs`](../src/proxy/stream.rs).
+[`src/proxy/stream.rs`](https://github.com/mhdzumair/MediaFlow-Proxy-Light/blob/main/src/proxy/stream.rs).
 
 Configurable via `MAX_CONCURRENT_PER_HOST` constant.
 
@@ -208,7 +208,7 @@ throughput at c=100.
 
 ## Reproducing these results
 
-All benchmark code lives in [`tools/benchmark/`](../tools/benchmark/).
+All benchmark code lives in [`tools/benchmark/`](https://github.com/mhdzumair/MediaFlow-Proxy-Light/tree/main/tools/benchmark).
 You can regenerate every number in this document in ~5 minutes.
 
 ### 1. Install prerequisites
@@ -281,7 +281,7 @@ openssl speed -evp aes-128-ctr
 ### 6. Customise
 
 All settings can be overridden via env vars (see
-[`tools/benchmark/README.md`](../tools/benchmark/README.md)). Example:
+[`tools/benchmark/README.md`](https://github.com/mhdzumair/MediaFlow-Proxy-Light/blob/main/tools/benchmark/README.md)). Example:
 
 ```bash
 BENCH_FILE_MB=25 BENCH_SIZEMB=25 \

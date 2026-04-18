@@ -21,3 +21,6 @@ target/
 #.idea/
 
 config.toml
+
+# MkDocs build output
+site/

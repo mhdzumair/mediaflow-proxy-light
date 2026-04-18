@@ -43,6 +43,7 @@ nav:
       - Environment variables: configuration/environment.md
       - TOML config file: configuration/toml.md
       - Docker: configuration/docker.md
+      - Docker build optimization: DOCKER_OPTIMIZATION.md
   - Usage:
       - Overview & endpoints: usage/overview.md
       - EPG proxy: usage/epg-proxy.md
