@@ -27,7 +27,8 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-      - run: pip install mkdocs-material
+          cache-dependency-path: docs/requirements.txt
+      - run: pip install -r docs/requirements.txt
       - run: mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         with:
