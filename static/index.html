@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MediaFlow Proxy</title>
+    <title>MediaFlow Proxy Light</title>
     <link rel="icon" href="/logo.png" type="image/x-icon">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <script src="https://cdn.tailwindcss.com"></script>
@@ -63,6 +63,12 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            /* `bg-clip:text` clips glyphs to the font's advance box, which cuts
+               off descenders (the "g" in "Light").  Extra line-height +
+               padding gives the descenders room to render. */
+            line-height: 1.15;
+            display: inline-block;
+            padding-bottom: 0.1em;
         }
         
         .hero-gradient {
@@ -92,14 +98,16 @@
         <div class="hero-gradient rounded-3xl p-8 md:p-12 mb-10 animate-fade-in">
             <div class="flex flex-col md:flex-row items-center gap-8">
                 <div class="animate-float">
-                    <img src="/logo.png" alt="MediaFlow Proxy Logo" class="w-32 h-32 md:w-40 md:h-40 rounded-2xl shadow-2xl">
+                    <img src="/logo.png" alt="MediaFlow Proxy Light Logo" class="w-32 h-32 md:w-40 md:h-40 rounded-2xl shadow-2xl">
                 </div>
                 <div class="text-center md:text-left">
                     <h1 class="text-4xl md:text-5xl font-bold gradient-text mb-4">
-                        MediaFlow Proxy
+                        MediaFlow Proxy Light
                     </h1>
                     <p class="text-lg text-gray-600 dark:text-gray-300 max-w-xl">
-                        A high-performance proxy server for streaming media, supporting HTTP(S), HLS, MPEG-DASH with real-time DRM decryption, and on-the-fly video transcoding.
+                        A Rust port of
+                        <a href="https://github.com/mhdzumair/mediaflow-proxy" class="font-semibold text-indigo-600 dark:text-indigo-400 underline decoration-dotted hover:decoration-solid" target="_blank" rel="noopener">mediaflow-proxy</a> &mdash;
+                        a high-performance, wire-compatible streaming proxy for HTTP(S), HLS, MPEG-DASH with real-time DRM decryption and on-the-fly transcoding. Runs as a single static binary (desktop / Docker) or bundled inside the Android / Android&nbsp;TV app.
                     </p>
                 </div>
             </div>
@@ -351,7 +359,7 @@
 
         <!-- Footer -->
         <div class="text-center mt-12 text-sm text-gray-500 dark:text-gray-400">
-            <p>MediaFlow Proxy &mdash; High-performance streaming proxy</p>
+            <p>MediaFlow Proxy Light &mdash; Rust reimplementation of mediaflow-proxy. &nbsp;<a href="https://github.com/mhdzumair/mediaflow-proxy-light" class="underline hover:text-indigo-500" target="_blank" rel="noopener">source</a></p>
         </div>
     </main>
 

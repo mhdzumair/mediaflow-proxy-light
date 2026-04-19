@@ -1888,6 +1888,21 @@
             localStorage.setItem('theme', newTheme);
         });
 
+        // Persist the global API password across pages (speedtest, playlist
+        // builder, etc.) so the user only has to type it once.  Key name
+        // matches what speedtest.js and playlist_builder.html read.
+        (function restoreApiPassword() {
+            const el = document.getElementById('globalApiPassword');
+            if (!el) return;
+            const saved = localStorage.getItem('mediaflow_api_password');
+            if (saved) el.value = saved;
+            el.addEventListener('input', () => {
+                const v = el.value.trim();
+                if (v) localStorage.setItem('mediaflow_api_password', v);
+                else localStorage.removeItem('mediaflow_api_password');
+            });
+        })();
+
 
         // Tab switching
         function switchTab(tabName) {
