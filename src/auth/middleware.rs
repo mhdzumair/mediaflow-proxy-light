@@ -14,6 +14,11 @@ use crate::error::AppError;
 
 const OPEN_ENDPOINTS: &[&str] = &[
     "/proxy/generate_url",
+    // URL-generation handlers authenticate via `api_password` in the JSON body,
+    // not query string — so the middleware must let these through untouched.
+    "/generate_url",
+    "/generate_urls",
+    "/generate_encrypted_or_encoded_url",
     "/health",
     // Web UI navigation paths (redirect to .html pages)
     "/speedtest",
