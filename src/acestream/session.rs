@@ -243,26 +243,54 @@ impl AcestreamSessionManager {
     }
 
     /// Decrement the client count; stop the engine session only when the last client leaves.
+    ///
+    /// A 30-second grace period is applied before stopping: players commonly send a
+    /// short-lived probe GET (a few seconds of data) before the real stream connection,
+    /// and stopping the engine on that probe would kill the session for the real client.
     pub async fn release_client(&self, infohash: &str) {
-        let (prev_count, command_url) = match self.sessions.get(infohash) {
-            Some(s) => (
-                s.client_count.fetch_sub(1, Ordering::Relaxed),
-                s.command_url.clone(),
-            ),
+        let prev_count = match self.sessions.get(infohash) {
+            Some(s) => s.client_count.fetch_sub(1, Ordering::Relaxed),
             None => return,
         };
         // DashMap read-lock released here (guard dropped at end of `match`)
 
-        if prev_count <= 1 {
-            // Last client gone — remove session and stop the engine.
-            self.sessions.remove(infohash);
-            self.send_stop_command(infohash, command_url).await;
-        } else {
+        if prev_count > 1 {
             tracing::debug!(
                 "Acestream client released ({} remaining) for {infohash:.16}",
                 prev_count - 1
             );
+            return;
         }
+
+        // Last client disconnected — wait before stopping to allow quick reconnects.
+        // Players often send a short probe GET (a few seconds) before the real stream.
+        tracing::debug!(
+            "Acestream last client released for {infohash:.16} — grace period before stop"
+        );
+        let manager = self.clone();
+        let infohash_owned = infohash.to_string();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            match manager.sessions.get(&infohash_owned) {
+                Some(s) if s.client_count.load(Ordering::Relaxed) > 0 => {
+                    tracing::debug!(
+                        "Acestream grace period: client reconnected, keeping session {infohash_owned:.16}"
+                    );
+                }
+                Some(_) => {
+                    let url = manager
+                        .sessions
+                        .get(&infohash_owned)
+                        .and_then(|s| s.command_url.clone());
+                    manager.sessions.remove(&infohash_owned);
+                    tracing::info!(
+                        "Acestream stopping idle session {infohash_owned:.16} after grace period"
+                    );
+                    manager.send_stop_command(&infohash_owned, url).await;
+                }
+                None => {}
+            }
+        });
     }
 
     /// Send a stop command to the engine for a session (forced, e.g. admin/invalidation).
