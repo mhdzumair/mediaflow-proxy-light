@@ -91,7 +91,7 @@ A healthy response looks like:
 
 With the Telegram proxy active, you can stream any Telegram video by passing its URL or message reference to the `/proxy/telegram/stream` endpoint. The URL Generator's **Telegram** tab builds these URLs for you — paste a `t.me` link, choose your options, and copy the generated proxy URL.
 
-See [Usage — Overview](usage/overview.md) for the full endpoint reference.
+See [Usage — Overview](overview.md) for the full endpoint reference.
 
 ---
 

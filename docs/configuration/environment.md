@@ -160,4 +160,4 @@ The Config tab UI maps directly to the same `APP__*` variable names:
 > [!NOTE]
 > The Android app uses `tls-rustls` (bundled CA roots) by default. This is required because Android's system TLS trust store is not at a standard path that OpenSSL probes on Linux — using bundled roots ensures every HTTPS connection works regardless of Android version.
 
-For installation and first-time setup on Android, see [Installation → Android & Android TV](../installation.md#android--android-tv-apk).
+For installation and first-time setup on Android, see [Installation → Android & Android TV](../installation.md#android-android-tv-apk).
