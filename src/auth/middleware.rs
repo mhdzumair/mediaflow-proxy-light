@@ -162,24 +162,21 @@ where
                         .realip_remote_addr()
                         .map(|s| s.to_string());
 
-                    // Decrypt and validate token
+                    // Decrypt the token. A successful decryption is itself proof
+                    // of authentication: the AES-256 key is derived from
+                    // `api_password`, so only a caller that knows the password
+                    // can produce a ciphertext that decrypts to valid JSON
+                    // ProxyData (wrong key → Pkcs7 padding error or non-JSON
+                    // garbage). No further api_password check inside the
+                    // decrypted payload is needed, and requiring one breaks
+                    // Python-proxy compatibility: neither the Python
+                    // mediaflow-proxy nor our own `generate_url(s)` handlers
+                    // embed api_password inside the encrypted payload, so the
+                    // old post-decryption check rejected every token those
+                    // code paths produced with a silent 401.
                     let proxy_data = handler
                         .decrypt(token, client_ip.as_deref())
                         .map_err(Error::from)?;
-
-                    // validate api password
-                    if proxy_data
-                        .query_params
-                        .as_ref()
-                        .and_then(|v| v.get("api_password"))
-                        .and_then(|v| v.as_str())
-                        != Some(&api_password)
-                    {
-                        return Err(AppError::Auth(
-                            "Invalid or missing authentication".to_string(),
-                        )
-                        .into());
-                    }
 
                     // Store proxy data in request extensions
                     req.extensions_mut().insert(proxy_data);
