@@ -6,15 +6,15 @@ All settings can be configured via environment variables using the `APP__<SECTIO
 
 | Variable | Default | Description |
 |---|---|---|
-| `APP__SERVER__HOST` | `0.0.0.0` | Bind address |
+| `APP__SERVER__HOST` | `127.0.0.1` | Bind address. Set to `0.0.0.0` to accept connections from all interfaces (required for Docker and remote access). |
 | `APP__SERVER__PORT` | `8888` | Listen port |
-| `APP__SERVER__WORKERS` | CPU count | Number of worker threads |
+| `APP__SERVER__WORKERS` | `4` | Number of worker threads |
 
 ## Auth
 
 | Variable | Default | Description |
 |---|---|---|
-| `APP__AUTH__API_PASSWORD` | *(none)* | API password. If set, all endpoints require `?api_password=<value>` (or an encrypted `?token=...`). Applies to `/proxy/*`, `/extractor/*`, `/metrics`, `/generate_url`, `/base64/*`, and the Xtream Codes endpoints. Only `/health` and the static web-UI pages are unauthenticated. |
+| `APP__AUTH__API_PASSWORD` | `changeme` | API password. All endpoints require `?api_password=<value>` (or an encrypted `?token=...`). Applies to `/proxy/*`, `/extractor/*`, `/metrics`, `/generate_url`, `/base64/*`, and the Xtream Codes endpoints. Only `/health` and the static web-UI pages are unauthenticated. **Always set a strong password in production.** |
 
 ## Proxy / Routing
 
@@ -114,6 +114,7 @@ When `APP__REDIS__URL` is empty the proxy falls back to the in-process `moka` ca
 | `APP__ACESTREAM__HOST` | `localhost` | Acestream engine hostname |
 | `APP__ACESTREAM__PORT` | `6878` | Acestream engine HTTP API port |
 | `APP__ACESTREAM__BUFFER_SIZE` | `4194304` | MPEG-TS fan-out buffer in bytes (4 MB) |
+| `APP__ACESTREAM__ACCESS_TOKEN` | *(none)* | Static access token for the engine HTTP API. Required on some Android Acestream builds that lock the API behind a token. |
 
 ## Transcoding
 
@@ -135,3 +136,28 @@ When `APP__REDIS__URL` is empty the proxy falls back to the in-process `moka` ca
 | Variable | Default | Description |
 |---|---|---|
 | `CONFIG_PATH` | *(none)* | Path to a TOML config file. See [TOML config](toml.md). |
+
+---
+
+## Android configuration
+
+On Android (phone, tablet, Android TV, Fire TV) all settings are configured through the **MediaFlow Proxy** app's **Config** tab — there is no shell to set environment variables.
+
+The Config tab UI maps directly to the same `APP__*` variable names:
+
+| Config tab field | Equivalent variable | Notes |
+|---|---|---|
+| API Password | `APP__AUTH__API_PASSWORD` | Set this before sharing the proxy URL with clients |
+| Port | `APP__SERVER__PORT` | Restart required after changing |
+| Log Level | `APP__LOG_LEVEL` | `debug` is useful for troubleshooting |
+| Acestream Host | `APP__ACESTREAM__HOST` | Change if your engine runs on a different device |
+| Acestream Port | `APP__ACESTREAM__PORT` | Default is `6878` |
+| Acestream Token | `APP__ACESTREAM__ACCESS_TOKEN` | Only needed if your engine requires a token |
+| Telegram API ID | `APP__TELEGRAM__API_ID` | From [my.telegram.org](https://my.telegram.org) |
+| Telegram API Hash | `APP__TELEGRAM__API_HASH` | From [my.telegram.org](https://my.telegram.org) |
+| Telegram Session | `APP__TELEGRAM__SESSION_STRING` | Generated in the web UI Session String Generator |
+
+> [!NOTE]
+> The Android app uses `tls-rustls` (bundled CA roots) by default. This is required because Android's system TLS trust store is not at a standard path that OpenSSL probes on Linux — using bundled roots ensures every HTTPS connection works regardless of Android version.
+
+For installation and first-time setup on Android, see [Installation → Android & Android TV](../installation.md#android--android-tv-apk).

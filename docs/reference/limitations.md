@@ -33,15 +33,40 @@ The binary is available for Windows but has not been extensively tested on that 
 
 ## Feature flags
 
-Some features are disabled by default or require compile-time feature flags:
+Features are split into two groups: those included in every release binary and optional ones that require building from source.
+
+### Default features (all pre-built binaries)
 
 | Feature | Flag | Notes |
 |---|---|---|
-| Redis cache | `redis` | Optional; in-process cache used by default |
-| Transcoding | `transcode` | Requires FFmpeg in PATH |
-| Telegram | `telegram` | Enabled in default builds |
-| Acestream | `acestream` | Enabled in default builds |
-| Web UI | `web-ui` | Enabled in default builds; embedded at compile time |
-| iOS FFI bridge | `ffi` | Only for xcframework builds |
+| HLS processing | `hls` | M3U8 manifest rewriting, pre-buffering, segment proxy |
+| DASH/MPD processing | `mpd` | DASH-to-HLS conversion, ClearKey DRM decryption |
+| ClearKey DRM | `drm` | AES-128 / AES-CTR key caching and decryption |
+| Xtream Codes proxy | `xtream` | Full Xtream Codes API passthrough |
+| Video extractors | `extractors` | Scrapers for supported video hosting sites |
+| Web UI | `web-ui` | Browser-based URL generator; embedded at compile time |
+| Base64 URL encoding | `base64-url` | `/base64/` endpoint for URL-safe parameter encoding |
+| Telegram MTProto | `telegram` | Streaming via Telegram MTProto sessions |
+| Acestream | `acestream` | P2P Acestream engine session management |
+| Rustls TLS | `tls-rustls` | Pure-Rust TLS backend; bundled Mozilla CA roots |
 
-Pre-built release binaries include all default features. Build from source to enable `redis` or `transcode`.
+### Optional features (build from source)
+
+| Feature | Flag | How to enable | Notes |
+|---|---|---|---|
+| Redis cache | `redis` | `--features redis` | Distributed cache; in-process `moka` cache used by default |
+| Transcoding | `transcode` | `--features transcode` | On-the-fly FFmpeg transcoding; requires FFmpeg in PATH |
+| Native TLS | `tls-native` | `--no-default-features --features tls-native,...` | OS TLS stack instead of rustls; avoids JA3 fingerprint issues on some CDNs. Incompatible with `extractors` on Linux |
+| iOS FFI bridge | `ffi` | `--features ffi` | C bridge for the iOS xcframework build only |
+
+### Build examples
+
+```bash
+# Redis + transcoding
+cargo build --release --features "redis,transcode"
+
+# All default features plus Redis
+cargo build --release --features "redis"
+```
+
+Pre-built release binaries include all default features. `redis` and `transcode` are opt-in because they require external dependencies (a Redis server and FFmpeg, respectively).

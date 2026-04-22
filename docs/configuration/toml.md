@@ -24,15 +24,15 @@ wget https://raw.githubusercontent.com/mhdzumair/MediaFlow-Proxy-Light/main/conf
 # Server
 # ===========================================================================
 [server]
-host    = "0.0.0.0"
+host    = "127.0.0.1"   # Use "0.0.0.0" for Docker or remote access
 port    = 8888
-workers = 4          # Defaults to number of CPU cores
+workers = 4             # Default: 4
 
 # ===========================================================================
 # Auth
 # ===========================================================================
 [auth]
-api_password = "your-secure-password"   # Required — do not use in production without this
+api_password = "changeme"   # Default — always replace with a strong secret before exposing the proxy
 
 # ===========================================================================
 # Proxy / upstream routing
@@ -128,9 +128,10 @@ max_connections = 8   # Parallel MTProto DC connections for chunk downloads
 # Acestream P2P
 # ===========================================================================
 [acestream]
-host        = "localhost"
-port        = 6878
-buffer_size = 4194304   # MPEG-TS fan-out buffer in bytes (4 MB)
+host         = "localhost"
+port         = 6878
+buffer_size  = 4194304   # MPEG-TS fan-out buffer in bytes (4 MB)
+# access_token = ""      # Static engine API token (some Android builds require this)
 
 # ===========================================================================
 # On-the-fly transcoding (requires ffmpeg in PATH)

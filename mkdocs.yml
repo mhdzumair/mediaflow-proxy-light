@@ -49,6 +49,8 @@ nav:
       - EPG proxy: usage/epg-proxy.md
       - Video extractor: usage/extractor.md
       - Xtream Codes proxy: usage/xtream.md
+      - Acestream proxy: usage/acestream.md
+      - Telegram proxy: usage/telegram.md
       - URL parameters: usage/url-params.md
   - Performance & Benchmarks: benchmark.md
   - Reference:
