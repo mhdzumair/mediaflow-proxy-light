@@ -208,8 +208,9 @@ pub fn build_proxy_url(
         .unwrap_or_default();
 
     if let Some(password) = api_password.filter(|p| !p.is_empty()) {
-        let handler = EncryptionHandler::new(password.as_bytes())
-            .map_err(|e| AppError::Internal(format!("Failed to create encryption handler: {}", e)))?;
+        let handler = EncryptionHandler::new(password.as_bytes()).map_err(|e| {
+            AppError::Internal(format!("Failed to create encryption handler: {}", e))
+        })?;
 
         let proxy_data = ProxyData {
             destination: destination_url.to_string(),
@@ -223,7 +224,11 @@ pub fn build_proxy_url(
                 serde_json::to_value(response_headers).map_err(AppError::SerdeJsonError)?,
             ),
             exp: expiration.map(|e| {
-                SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() + e
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs()
+                    + e
             }),
             ip: ip.map(|s| s.to_string()),
         };
@@ -235,10 +240,7 @@ pub fn build_proxy_url(
         let (scheme_authority, existing_path) = split_base_and_path(base);
         let mut url = format!(
             "{}/_token_{}{}{}",
-            scheme_authority,
-            token,
-            existing_path,
-            endpoint_path
+            scheme_authority, token, existing_path, endpoint_path
         );
         if let Some(fname) = filename {
             url = format!("{}/{}", url, urlencoding::encode(fname));
@@ -271,7 +273,11 @@ pub fn build_proxy_url(
             if SUPPORTED_REQUEST_HEADERS.contains(&bare) {
                 continue;
             }
-            let prefixed = if k.starts_with("h_") { k.clone() } else { format!("h_{}", k) };
+            let prefixed = if k.starts_with("h_") {
+                k.clone()
+            } else {
+                format!("h_{}", k)
+            };
             params.push((prefixed, v.clone()));
         }
 
@@ -279,7 +285,11 @@ pub fn build_proxy_url(
             if v.is_empty() {
                 continue;
             }
-            let prefixed = if k.starts_with("r_") { k.clone() } else { format!("r_{}", k) };
+            let prefixed = if k.starts_with("r_") {
+                k.clone()
+            } else {
+                format!("r_{}", k)
+            };
             params.push((prefixed, v.clone()));
         }
 
@@ -287,7 +297,11 @@ pub fn build_proxy_url(
             if v.is_empty() {
                 continue;
             }
-            let prefixed = if k.starts_with("rp_") { k.clone() } else { format!("rp_{}", k) };
+            let prefixed = if k.starts_with("rp_") {
+                k.clone()
+            } else {
+                format!("rp_{}", k)
+            };
             params.push((prefixed, v.clone()));
         }
 

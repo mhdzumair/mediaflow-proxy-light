@@ -330,15 +330,17 @@ pub async fn acestream_stream_handler(
         return Ok(HttpResponse::Ok().content_type("video/mp2t").finish());
     };
 
-    // Spawn a background task: when the stream ends or the client drops,
-    // send the stop command to the acestream engine.
+    // Register this client. The engine session is shared across clients;
+    // stop the engine only when the last client disconnects.
+    session_mgr.increment_client(&infohash);
+
     let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
     let session_mgr_clone = session_mgr.clone();
     let infohash_clone = infohash.clone();
     tokio::spawn(async move {
         let _ = stop_rx.await;
-        tracing::info!("Acestream client disconnected — stopping session {infohash_clone:.16}");
-        session_mgr_clone.stop_session(&infohash_clone).await;
+        tracing::info!("Acestream client disconnected — releasing session {infohash_clone:.16}");
+        session_mgr_clone.release_client(&infohash_clone).await;
     });
 
     let wrapped = StopNotifyStream::new(raw_stream, stop_tx);

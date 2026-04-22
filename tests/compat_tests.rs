@@ -54,7 +54,8 @@ fn parse_qs(url: &str) -> HashMap<String, String> {
 /// Python generated: encrypt_data({"d": "https://cdn.example.com/stream.m3u8"})
 #[test]
 fn decrypt_python_token_destination_only() {
-    let tok = "AAECAwQFBgcICQoLDA0OD1NDNLU6BmO_093POOmfhHoL29QQVC_7Zf3ZkxMIV0AmCCVw7DPCWWcA59PdeoN7PQ";
+    let tok =
+        "AAECAwQFBgcICQoLDA0OD1NDNLU6BmO_093POOmfhHoL29QQVC_7Zf3ZkxMIV0AmCCVw7DPCWWcA59PdeoN7PQ";
     let pd = handler().decrypt(tok, None).unwrap();
     assert_eq!(pd.destination, "https://cdn.example.com/stream.m3u8");
     // No headers should be present (empty flat dict)
@@ -100,7 +101,10 @@ fn decrypt_python_token_expired_rejected() {
     let result = handler().decrypt(tok, None);
     assert!(result.is_err(), "expired token must be rejected");
     let msg = format!("{:?}", result.unwrap_err());
-    assert!(msg.contains("expired"), "error should mention expiry, got: {msg}");
+    assert!(
+        msg.contains("expired"),
+        "error should mention expiry, got: {msg}"
+    );
 }
 
 /// Python generated token containing "ip": "1.2.3.4" — matching IP accepted.
@@ -177,7 +181,10 @@ fn encrypted_url_uses_token_path_format() {
         "endpoint must follow token, got: {url}"
     );
     // Must NOT contain ?token=
-    assert!(!url.contains("?token="), "must not use query-param token style");
+    assert!(
+        !url.contains("?token="),
+        "must not use query-param token style"
+    );
 }
 
 /// The token embedded in the /_token_ URL must be decryptable back to the original payload.
@@ -319,7 +326,10 @@ fn unencrypted_url_uses_query_param_style() {
     )
     .unwrap();
 
-    assert!(url.starts_with("https://proxy.example.com/proxy/stream?"), "got: {url}");
+    assert!(
+        url.starts_with("https://proxy.example.com/proxy/stream?"),
+        "got: {url}"
+    );
     assert!(!url.contains("/_token_"), "must not use token path format");
     let qs = parse_qs(&url);
     assert_eq!(qs["d"], "https://cdn.example.com/stream.m3u8");
@@ -351,8 +361,14 @@ fn unencrypted_url_header_prefixes() {
     .unwrap();
 
     let qs = parse_qs(&url);
-    assert_eq!(qs["h_Authorization"], "Bearer tok", "request header needs h_ prefix");
-    assert_eq!(qs["r_Content-Type"], "video/mp4", "response header needs r_ prefix");
+    assert_eq!(
+        qs["h_Authorization"], "Bearer tok",
+        "request header needs h_ prefix"
+    );
+    assert_eq!(
+        qs["r_Content-Type"], "video/mp4",
+        "response header needs r_ prefix"
+    );
 }
 
 /// range and if-range request headers must be excluded (they are per-request dynamic values).
@@ -361,8 +377,8 @@ fn unencrypted_url_header_prefixes() {
 fn unencrypted_url_skips_supported_request_headers() {
     let mut req_hdrs = HashMap::new();
     req_hdrs.insert("Authorization".into(), "Bearer tok".into());
-    req_hdrs.insert("range".into(), "bytes=0-".into());     // must be excluded
-    req_hdrs.insert("if-range".into(), "etag123".into());   // must be excluded
+    req_hdrs.insert("range".into(), "bytes=0-".into()); // must be excluded
+    req_hdrs.insert("if-range".into(), "etag123".into()); // must be excluded
 
     let url = build_proxy_url(
         "https://proxy.example.com",
@@ -382,10 +398,19 @@ fn unencrypted_url_skips_supported_request_headers() {
     .unwrap();
 
     let qs = parse_qs(&url);
-    assert!(qs.contains_key("h_Authorization"), "Authorization must be present");
+    assert!(
+        qs.contains_key("h_Authorization"),
+        "Authorization must be present"
+    );
     assert!(!qs.contains_key("h_range"), "range must be filtered out");
-    assert!(!qs.contains_key("h_if-range"), "if-range must be filtered out");
-    assert!(!qs.contains_key("range"), "range must not appear without prefix either");
+    assert!(
+        !qs.contains_key("h_if-range"),
+        "if-range must be filtered out"
+    );
+    assert!(
+        !qs.contains_key("range"),
+        "range must not appear without prefix either"
+    );
 }
 
 /// Propagate headers get rp_ prefix.
@@ -412,7 +437,10 @@ fn unencrypted_url_propagate_headers_rp_prefix() {
     .unwrap();
 
     let qs = parse_qs(&url);
-    assert_eq!(qs["rp_Cache-Control"], "no-cache", "propagate header needs rp_ prefix");
+    assert_eq!(
+        qs["rp_Cache-Control"], "no-cache",
+        "propagate header needs rp_ prefix"
+    );
 }
 
 /// remove_response_headers serialises as x_headers=A,B.
@@ -509,7 +537,16 @@ fn from_python_flat_dict_maps_destination() {
         serde_json::from_str(r#"{"d": "https://cdn.example.com/stream.m3u8"}"#).unwrap();
     let pd = ProxyData::from_python_flat_dict(map);
     assert_eq!(pd.destination, "https://cdn.example.com/stream.m3u8");
-    assert!(pd.request_headers.is_none() || pd.request_headers.as_ref().unwrap().as_object().unwrap().is_empty());
+    assert!(
+        pd.request_headers.is_none()
+            || pd
+                .request_headers
+                .as_ref()
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .is_empty()
+    );
 }
 
 #[test]
@@ -547,8 +584,17 @@ fn from_python_flat_dict_strips_exp_and_ip_from_params() {
     assert_eq!(pd.exp, Some(9_999_999_999));
     assert_eq!(pd.ip.as_deref(), Some("1.2.3.4"));
     // exp and ip must NOT appear in query_params
-    assert!(pd.query_params.is_none() || pd.query_params.as_ref().unwrap().as_object().unwrap().is_empty(),
-        "exp/ip should not appear in query_params");
+    assert!(
+        pd.query_params.is_none()
+            || pd
+                .query_params
+                .as_ref()
+                .unwrap()
+                .as_object()
+                .unwrap()
+                .is_empty(),
+        "exp/ip should not appear in query_params"
+    );
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -573,8 +619,8 @@ fn from_python_flat_dict_strips_exp_and_ip_from_params() {
 #[cfg(test)]
 mod middleware_tests {
     use actix_web::{test, web, App, HttpRequest, HttpResponse};
-    use mediaflow_proxy_light::auth::middleware::AuthMiddleware;
     use mediaflow_proxy_light::auth::encryption::{EncryptionHandler, ProxyData};
+    use mediaflow_proxy_light::auth::middleware::AuthMiddleware;
 
     fn make_token(password: &str, dest: &str) -> String {
         let h = EncryptionHandler::new(password.as_bytes()).unwrap();
@@ -728,15 +774,21 @@ mod middleware_tests {
     #[actix_web::test]
     async fn wrong_password_token_decrypt_rejected() {
         let good = EncryptionHandler::new(b"secret").unwrap();
-        let bad  = EncryptionHandler::new(b"wrong").unwrap();
+        let bad = EncryptionHandler::new(b"wrong").unwrap();
         let pd = ProxyData {
             destination: "https://cdn.example.com/stream.m3u8".into(),
-            query_params: None, request_headers: None, response_headers: None,
-            exp: None, ip: None,
+            query_params: None,
+            request_headers: None,
+            response_headers: None,
+            exp: None,
+            ip: None,
         };
         let token = bad.encrypt(&pd).unwrap();
         // The "secret" handler must reject a token produced by "wrong"
-        assert!(good.decrypt(&token, None).is_err(), "wrong-password token must be rejected");
+        assert!(
+            good.decrypt(&token, None).is_err(),
+            "wrong-password token must be rejected"
+        );
     }
 
     /// Python flat-dict token is also rejected when the password doesn't match.

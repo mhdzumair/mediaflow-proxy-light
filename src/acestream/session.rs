@@ -5,6 +5,7 @@
 //! engine-assigned `playback_url` (containing the `access_token`) plus
 //! `stat_url` and `command_url` for lifecycle management.
 
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -52,6 +53,8 @@ pub struct AcestreamSession {
     pub is_free_mode: bool,
     pub created_at: Instant,
     pub last_access: Instant,
+    /// Number of active streaming clients sharing this engine session.
+    pub client_count: Arc<AtomicUsize>,
 }
 
 impl AcestreamSession {
@@ -174,6 +177,7 @@ impl AcestreamSessionManager {
             is_free_mode,
             created_at: Instant::now(),
             last_access: Instant::now(),
+            client_count: Arc::new(AtomicUsize::new(0)),
         };
 
         self.sessions.insert(infohash.to_string(), session.clone());
@@ -231,7 +235,37 @@ impl AcestreamSessionManager {
         ))
     }
 
-    /// Send a stop command to the engine for a session.
+    /// Increment the client count for a session (call once per active stream consumer).
+    pub fn increment_client(&self, infohash: &str) {
+        if let Some(s) = self.sessions.get(infohash) {
+            s.client_count.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    /// Decrement the client count; stop the engine session only when the last client leaves.
+    pub async fn release_client(&self, infohash: &str) {
+        let (prev_count, command_url) = match self.sessions.get(infohash) {
+            Some(s) => (
+                s.client_count.fetch_sub(1, Ordering::Relaxed),
+                s.command_url.clone(),
+            ),
+            None => return,
+        };
+        // DashMap read-lock released here (guard dropped at end of `match`)
+
+        if prev_count <= 1 {
+            // Last client gone — remove session and stop the engine.
+            self.sessions.remove(infohash);
+            self.send_stop_command(infohash, command_url).await;
+        } else {
+            tracing::debug!(
+                "Acestream client released ({} remaining) for {infohash:.16}",
+                prev_count - 1
+            );
+        }
+    }
+
+    /// Send a stop command to the engine for a session (forced, e.g. admin/invalidation).
     pub async fn stop_session(&self, infohash: &str) {
         let command_url = self
             .sessions
@@ -239,9 +273,11 @@ impl AcestreamSessionManager {
             .and_then(|s| s.command_url.clone());
 
         self.sessions.remove(infohash);
+        self.send_stop_command(infohash, command_url).await;
+    }
 
+    async fn send_stop_command(&self, infohash: &str, command_url: Option<String>) {
         if let Some(url) = command_url {
-            // command_url from engine already contains query params; append method=stop
             let stop_url = if url.contains('?') {
                 format!("{url}&method=stop")
             } else {
