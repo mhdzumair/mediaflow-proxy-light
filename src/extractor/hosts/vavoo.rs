@@ -123,35 +123,72 @@ impl Extractor for VavooExtractor {
             ))
         })?;
 
-        // Resolve the Vavoo URL.
+        // Resolve the Vavoo URL via mediahubmx-resolve.json (matching Python extractor).
+        let resolve_body = serde_json::json!({
+            "language": "de",
+            "region": "AT",
+            "url": url,
+            "clientVersion": "3.0.2",
+        });
+
         let resolve_resp = self
             .0
             .client
-            .get(url)
+            .post("https://vavoo.to/mediahubmx-resolve.json")
             .header("user-agent", RESOLVE_UA)
-            .header("referer", "https://vavoo.to/")
-            .header("x-signature-v2", signature)
+            .header("accept", "application/json")
+            .header("content-type", "application/json; charset=utf-8")
+            .header("mediahubmx-signature", signature)
+            .json(&resolve_body)
             .send()
             .await
             .map_err(|e| ExtractorError::Network(e.to_string()))?;
 
-        let final_url = resolve_resp.url().to_string();
+        let resolve_data: serde_json::Value = resolve_resp
+            .json()
+            .await
+            .map_err(|e| ExtractorError::extract(format!("Vavoo: resolve parse error: {e}")))?;
+
+        // Response can be a JSON array or object
+        let final_url = if let Some(arr) = resolve_data.as_array() {
+            arr.first()
+                .and_then(|v| v["url"].as_str())
+                .map(String::from)
+        } else {
+            resolve_data["url"]
+                .as_str()
+                .or_else(|| resolve_data["data"]["url"].as_str())
+                .map(String::from)
+        }
+        .ok_or_else(|| {
+            ExtractorError::extract(format!(
+                "Vavoo: no URL found in resolve response: {resolve_data}"
+            ))
+        })?;
 
         let mut headers = HashMap::new();
-        headers.insert("user-agent".to_string(), RESOLVE_UA.to_string());
-        headers.insert("referer".to_string(), "https://vavoo.to/".to_string());
-        headers.insert("x-signature-v2".to_string(), signature.to_string());
+        headers.insert(
+            "User-Agent".to_string(),
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36".to_string(),
+        );
+        headers.insert("Referer".to_string(), "https://vavoo.to".to_string());
+        headers.insert("Origin".to_string(), "https://vavoo.to".to_string());
+        headers.insert(
+            "X-EasyProxy-Disable-SSL".to_string(),
+            "1".to_string(),
+        );
 
         // If the resolved URL is an HLS manifest, route it through hls_manifest_proxy
         // so segment URLs inside the playlist get rewritten.  Raw TS streams go
         // through the stream proxy as-is.
-        let path = resolve_resp.url().path().to_lowercase();
-        let endpoint =
-            if path.ends_with(".m3u8") || path.ends_with(".m3u") || path.ends_with(".m3u_plus") {
+        let endpoint = {
+            let lower = final_url.to_lowercase();
+            if lower.contains(".m3u8") || lower.contains(".m3u") || lower.contains(".m3u_plus") {
                 "hls_manifest_proxy"
             } else {
                 "proxy_stream_endpoint"
-            };
+            }
+        };
 
         Ok(ExtractorResult {
             destination_url: final_url,
