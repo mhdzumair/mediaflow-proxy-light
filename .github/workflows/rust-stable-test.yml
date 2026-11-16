@@ -1,0 +1,85 @@
+name: Rust Stable Test
+
+on:
+   workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_VERSION: stable
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Lint + test (desktop / server)
+  # ---------------------------------------------------------------------------
+  lint-and-test:
+    name: Lint & test
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          components: rustfmt, clippy
+
+      - name: Cache dependencies
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: Run tests
+        # --test-threads=1 because a few config tests mutate global env vars and
+        # race each other in parallel runs.
+        # Extractor tests are excluded here — they hit real upstream hosts
+        # (Cloudflare / Turnstile-protected) and are run locally only.
+        run: |
+          cargo test --release --lib --bins -- --test-threads=1
+          cargo test --release --test auth_tests --test config_tests -- --test-threads=1
+
+      - name: Install cargo-machete
+        run: cargo install cargo-machete --locked
+
+      - name: Audit unused dependencies
+        run: cargo machete
+
+  # ---------------------------------------------------------------------------
+  # Linux ARM64 smoke test (native aarch64 build)
+  # ---------------------------------------------------------------------------
+  linux-arm64-smoke:
+    name: Linux aarch64 smoke build
+    # Native ARM runner — avoids cross-compile entirely (and boring-sys2 issues)
+    runs-on: ubuntu-24.04-arm 
+    
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: aarch64-unknown-linux-gnu
+
+      - name: Build
+        # Matches the exact feature set and flag
+        run: |
+          cargo build \
+            --release \
+            --target aarch64-unknown-linux-gnu \
+            --no-default-features \
+            --features "hls,mpd,drm,xtream,extractors,telegram,acestream,web-ui,base64-url,tls-rustls"
