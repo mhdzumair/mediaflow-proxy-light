@@ -163,10 +163,7 @@ async fn main() -> std::io::Result<()> {
         })
         .collect();
 
-    tracing::info!(
-        "Starting MediaFlow Proxy Light on {}",
-        bind_addrs.join(",")
-    );
+    tracing::info!("Starting MediaFlow Proxy Light on {}", bind_addrs.join(","));
 
     let mut http_server = HttpServer::new(move || {
         let config = Arc::clone(&server_config);
