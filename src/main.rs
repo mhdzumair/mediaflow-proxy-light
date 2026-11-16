@@ -146,10 +146,26 @@ async fn main() -> std::io::Result<()> {
         std::time::Duration::from_secs(config.epg.cache_ttl.max(1)),
     )));
 
+    // Build bind addresses once. IPv6 literals need brackets before the port is
+    // appended (`[::]:8080`); IPv4 literals don't. Reused by the bind loop below
+    // so the startup log can never drift from what we actually bind.
+    let port = config.server.port;
+    let bind_addrs: Vec<String> = config
+        .server
+        .host
+        .iter()
+        .map(|host| {
+            if host.contains(':') && !host.starts_with('[') {
+                format!("[{host}]:{port}")
+            } else {
+                format!("{host}:{port}")
+            }
+        })
+        .collect();
+
     tracing::info!(
-        "Starting MediaFlow Proxy Light on [{}]:{}",
-        server_config.server.host.join(", "),
-        server_config.server.port
+        "Starting MediaFlow Proxy Light on {}",
+        bind_addrs.join(",")
     );
 
     let mut http_server = HttpServer::new(move || {
@@ -193,7 +209,7 @@ async fn main() -> std::io::Result<()> {
             app = app.app_data(hls_prebuffer.clone());
         }
 
-        let mut app = app
+        app = app
             // Root-level URL generation (Python-compatible paths)
             .route("/generate_url", web::post().to(handler::generate_url))
             .route("/generate_urls", web::post().to(handler::generate_urls))
@@ -625,12 +641,7 @@ async fn main() -> std::io::Result<()> {
             }))
     })
     .workers(config.server.workers);
-    for host in &config.server.host {
-        let addr_str = if host.contains(':') {
-            format!("[{}]:{}", host, config.server.port)
-        } else {
-            format!("{}:{}", host, config.server.port)
-        };
+    for addr_str in &bind_addrs {
         let socket_addr: std::net::SocketAddr = addr_str.parse().map_err(|e| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
