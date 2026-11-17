@@ -5,7 +5,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: stable
+  RUST_VERSION: 1.100.0
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
