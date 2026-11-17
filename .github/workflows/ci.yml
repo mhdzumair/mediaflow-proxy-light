@@ -9,7 +9,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  RUST_VERSION: 1.95.0
+  RUST_VERSION: 1.100.0
 
 # Cancel in-progress runs for the same PR/branch to save CI minutes
 # when Dependabot pushes multiple commits to the same PR.

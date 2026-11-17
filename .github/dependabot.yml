@@ -10,7 +10,7 @@ updates:
       day: "monday"
       time: "09:00"
       timezone: "UTC"
-    
+
     # Limit open PRs to prevent being overwhelmed
     open-pull-requests-limit: 10
 
@@ -41,7 +41,7 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    
+
     groups:
       github-actions:
         patterns:
