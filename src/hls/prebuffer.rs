@@ -550,7 +550,7 @@ mod tests {
         const PACKET_COUNT: usize = 64;
 
         let mut bytes = vec![0_u8; PACKET_SIZE * PACKET_COUNT];
-        for (packet_index, packet) in as_chunks_mut::<PACKET_SIZE>().0.iter_mut() {
+        for (packet_index, packet) in bytes.as_chunks_mut::<PACKET_SIZE>().0.iter_mut().enumerate() {
             packet[0] = 0x47;
             packet[1] = 0x40 | ((packet_index as u8) & 0x1f);
             packet[2] = (packet_index as u8).wrapping_add(seed);
